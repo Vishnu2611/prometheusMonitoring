@@ -1,0 +1,169 @@
+version: '2'
+
+# networks:
+#   anprnet:
+
+services:
+  elasticsearch:
+    network_mode: host
+    container_name: elasticsearch
+    image: elasticsearch:7.9.1
+    restart: always
+    environment:
+     - discovery.type=single-node
+    ports:
+      - 9200:9200
+      - 9300:9300
+
+  elasticexporter:
+    network_mode: host
+    container_name: elasticexporter
+    image: justwatch/elasticsearch_exporter:1.1.0
+    command:
+        - '--es.uri=${ELASTIC_DB_URI}'
+    restart: always
+    ports:
+        - 9114:9114
+
+  redisexporter:
+    network_mode: host
+    container_name: redisexporter
+    image: oliver006/redis_exporter:alpine
+    environment:
+      - REDIS_ADDR=${REDIS_DB_ADDR}
+    restart: always
+    ports:
+        - 9121:9121
+
+  postgresexporter:
+    network_mode: host
+    container_name: postgresexporter
+    image:  wrouesnel/postgres_exporter:latest
+    environment:
+      - DATA_SOURCE_NAME=${POSTGRES_DB_ADDR}
+    restart: always
+    ports:
+        - 9187:9187
+
+  blackboxexporter:
+    network_mode: host
+    container_name: blackboxexporter
+    image:  prom/blackbox-exporter:latest
+    restart: always
+    volumes:
+      - ./blackbox/config.yml:/blackbox.yml
+    command:
+      - '--config.file=/blackbox.yml'
+    ports:
+        - 9115:9115
+
+  node-exporter:
+    network_mode: host
+    image: prom/node-exporter:latest
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - --collector.filesystem.ignored-mount-points
+      - "^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)"
+    restart: always
+    ports:
+      - 9100:9100
+
+  alertmanager:
+    network_mode: host
+    image: prom/alertmanager:latest
+    ports:
+      - 9093:9093
+    volumes:
+      - ./alertmanager/:/etc/alertmanager/
+    restart: always
+    command:
+      - '--config.file=/etc/alertmanager/config.yml'
+      - '--storage.path=/alertmanager'
+
+  prometheus:
+    network_mode: host
+    container_name: prometheus
+    image: prom/prometheus:latest
+    user: root
+    volumes:
+      - ./prometheus/:/etc/prometheus/
+      - ./prometheus/prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - 9090:9090
+    # links:
+    #   - eexporter:eexporter
+    #   # - node-exporter:node-exporter
+    #   - alertmanager:alertmanager
+    depends_on:
+      - elasticexporter
+      - postgresexporter
+      - redisexporter
+      - alertmanager
+      - blackboxexporter
+      - node-exporter
+      # - nginxexporter
+    restart: always
+
+  # nginxexporter:
+  #   network_mode: host
+  #   container_name: nginxexporter
+  #   image:  wrouesnel/postgres_exporter:latest
+  #   environment:
+  #     - DATA_SOURCE_NAME=${POSTGRES_DB_ADDR}
+  #   restart: always
+  #   ports:
+  #       - 9187:9187
+
+  # sonarqube:
+  #   container_name: sonarqube
+  #   image: sonarqube
+  #   ports:
+  #     - 9000:9000
+  #     - 9092:9092
+  #   volumes:
+  #     - ./sonarqube/sonarqube-data:/opt/sonarqube/data
+  #     - ./sonarqube/logs:/opt/sonarqube/logs
+  #     - ./sonarqube/extensions/:/opt/sonarqube/extensions/
+
+  grafana:
+    network_mode: host
+    container_name: grafana
+    image: grafana/grafana:latest
+    environment:
+      - GF_INSTALL_PLUGINS=grafana-clock-panel
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - elasticexporter
+      - postgresexporter
+      - redisexporter
+      - alertmanager
+      - blackboxexporter
+      - node-exporter
+      - prometheus
+    ports:
+      - 3000:3000
+
+#  jenkins:
+#    container_name: jenkins.server
+#    image: jenkins-ansible
+#    build:
+#      context: jenkins-ansible
+#    restart: unless-stopped
+#    ports:
+#      - 80:8080
+#    volumes:
+#      - ./jenkins_home:/var/jenkins_home
+#      - ./.jenkins-ssh/:/root/.ssh/

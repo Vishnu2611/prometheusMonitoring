@@ -1,0 +1,88 @@
+# my global config
+global:
+  scrape_interval:     15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+  evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.
+  # scrape_timeout is set to the global default (10s).
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+  - static_configs:
+    - targets:
+      - localhost:9093
+
+# Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
+rule_files:
+  - "alert_rules.yml"
+
+# A scrape configuration containing exactly one endpoint to scrape:
+# Here it's Prometheus itself.
+scrape_configs:
+  # - job_name: 'prometheus'
+  #   scrape_interval: 10s
+  #   static_configs:
+  #   - targets: ['localhost:9090']
+
+  - job_name: 'Elasticsearch-Metrics(elasticsearch_exporter)'
+    scrape_interval: 10s
+    static_configs:
+    - targets: ['localhost:9114']
+
+  - job_name: 'RedisDB-Metrics(redis_exporter)'
+    scrape_interval: 10s
+    static_configs:
+    - targets: ['localhost:9121']
+
+  - job_name: 'PostgresDB-Metrics(postgres_exporter)'
+    scrape_interval: 10s
+    static_configs:
+    - targets: ['localhost:9187']
+  # - job_name: 'Nginx-Metrics(nginx_exporter)'
+  #   scrape_interval: 10s
+  #   static_configs:
+  #   - targets: ['localhost:9187']
+  # - job_name: 'nodejs_app - prometheus-metrics'
+  #   scrape_interval: 10s
+  #   static_configs:
+  #   - targets: ['client-app:8080']
+  # - job_name: 'nodejs_app - swagger stats'
+  #   scrape_interval: 10s
+  #   metrics_path: '/swagger-stats/metrics'
+  #   static_configs:
+  #   - targets: ['client-app:8080']
+  # - job_name: 'machine_metrics'
+  #   scrape_interval: 10s
+  #   static_configs:
+  #   - targets: ['node-exporter:9100']
+  - job_name: 'alert_manager'
+    scrape_interval: 10s
+    static_configs:
+    - targets: ['localhost:9093']
+
+  - job_name: blackbox # To get metrics about the exporter itself
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+        - localhost:9115
+
+  - job_name: 'machine_metrics'
+    scrape_interval: 10s
+    static_configs:
+    - targets: ['localhost:9100']
+
+  - job_name: blackbox-http
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - http://prometheus.io
+        - https://prometheus.io
+        - http://example.com:8080
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: localhost:9115
